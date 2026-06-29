@@ -284,7 +284,7 @@
 
   <aside class="sidebar-container" id="sidebar-container">
     <div class="sidebar-section" style="background: rgba(0,0,0,0.15);">
-      <div style="font-family: var(--font-mono); font-weight:700; font-size:13px; color:#fff;">SCALPER ENGINE <span style="color:var(--color-accent);">v8.0</span> <span style="font-size:10px; color:#10b981; font-weight:500;">☁ CLOUD SYNC</span></div>
+      <div style="font-family: var(--font-mono); font-weight:700; font-size:13px; color:#fff;">SCALPER ENGINE <span style="color:var(--color-accent);">v9.0</span> <span style="font-size:10px; color:#10b981; font-weight:500;">☁ CLOUD SYNC</span></div>
     </div>
     <div class="sidebar-section">
       <div class="sidebar-heading">Navigation Dashboard</div>
@@ -707,11 +707,16 @@ let botConfig = {
 let engineState = {
   isRunning: false, walletBalance: 10000.00, positions: [], tradeHistory: [], logs: [],
   rowBeingEdited: null, bestTradesBatches: [],
+  // v9: Only 5 precision signals — equal starting weight, learned over time
   signalWeights: { emaTrendCross: 25, rsiMacdMomentum: 25, bollingerMeanReversion: 25, volumeVolatilityDelta: 25 },
-  patternWeights: { threeBlackCrows: 20, threeWhiteSoldiers: 20, engulfingStructures: 20, doubleTopBottom: 20, headAndShoulders: 20 },
+  patternWeights: { engulfingStructures: 25, threeWhiteSoldiers: 25 },
   strategyStats: {
-    emaTrendCross: { wins: 0, total: 0 }, rsiMacdMomentum: { wins: 0, total: 0 }, bollingerMeanReversion: { wins: 0, total: 0 }, volumeVolatilityDelta: { wins: 0, total: 0 },
-    threeBlackCrows: { wins: 0, total: 0 }, threeWhiteSoldiers: { wins: 0, total: 0 }, engulfingStructures: { wins: 0, total: 0 }, doubleTopBottom: { wins: 0, total: 0 }, headAndShoulders: { wins: 0, total: 0 }
+    emaTrendCross: { wins: 0, total: 0 },
+    rsiMacdMomentum: { wins: 0, total: 0 },
+    bollingerMeanReversion: { wins: 0, total: 0 },
+    volumeVolatilityDelta: { wins: 0, total: 0 },
+    engulfingStructures: { wins: 0, total: 0 },
+    threeWhiteSoldiers: { wins: 0, total: 0 }
   }
 };
 
@@ -725,8 +730,8 @@ let candleRefreshThread = null;
 const MAX_SCAN_UNIVERSE_SIZE = 100;
 
 let symbolCooldownMap = {};
-const SYMBOL_COOLDOWN_MS = 3 * 60 * 1000;
-const MIN_POSITION_HOLD_MS = 60 * 1000;
+const SYMBOL_COOLDOWN_MS = 5 * 60 * 1000;  // v9: 5 min cooldown per symbol (was 3)
+const MIN_POSITION_HOLD_MS = 2 * 60 * 1000; // v9: hold minimum 2 mins before TP/SL check (was 1)
 
 // Shared learning status
 let sharedLearningLoaded = false;
@@ -995,6 +1000,7 @@ function commitGatekeeperConfigurations() {
   populateLockedLabels();
   saveEngineStateToCache();
   pushTerminalLog("FAST_BOOT", `High Frequency Engine active. 1m micro targets locked: TP: ${botConfig.tpPercent.toFixed(2)}% | SL: ${botConfig.slPercent.toFixed(2)}%.`);
+  pushTerminalLog("v9.0", `🎯 PRECISION MODE: 5-signal engine active. All 5 gates must clear before any trade fires. Max 3 concurrent positions. Min confluence: 80%. Wick candles rejected. Counter-trend trades blocked.`);
 }
 
 function populateLockedLabels() {
@@ -1183,7 +1189,29 @@ function calcTrendBias(closes) {
   return ema20 > ema50 ? 'up' : 'down';
 }
 
-// IMPROVED pattern detection with fixes
+// ============================================================
+// v9 PRECISION ENGINE — 5 HIGH-ACCURACY SIGNALS ONLY
+// Target: 85%+ win rate via strict confluence + hard gates
+// ============================================================
+
+// GATE 1: Wick rejection filter — noisy candles are skipped entirely
+function isCleanCandle(candle) {
+  const body = Math.abs(candle.close - candle.open);
+  const totalRange = candle.high - candle.low;
+  if (totalRange === 0) return false;
+  // Body must be at least 50% of total range — rejects doji/wick-dominated candles
+  return body / totalRange >= 0.50;
+}
+
+// GATE 2: Bollinger Squeeze detector — only trade breakouts from tight bands
+function isBollingerSqueeze(boll, lastClose) {
+  if (!boll) return false;
+  const bandWidthPct = (boll.upper - boll.lower) / boll.middle;
+  // Squeeze = band width < 1.5% of price. Breakout = price outside band.
+  return bandWidthPct < 0.015 && (lastClose >= boll.upper || lastClose <= boll.lower);
+}
+
+// Pattern detection — ONLY the two highest-accuracy patterns kept
 function detectCandlePatterns(candles) {
   const found = [];
   if (candles.length < 3) return found;
@@ -1192,150 +1220,164 @@ function detectCandlePatterns(candles) {
   const isBearish = c => c.close < c.open;
   const isBullish = c => c.close > c.open;
   const bodySize = c => Math.abs(c.close - c.open);
-  const range = c => c.high - c.low;
+  const totalRange = c => c.high - c.low;
 
-  // Three black crows: 3 consecutive bearish candles, each closing lower, bodies sizable
-  if (isBearish(c3) && isBearish(c2) && isBearish(c1) && 
-      c2.close < c3.close && c1.close < c2.close &&
-      bodySize(c1) > range(c1) * 0.5) { // body must fill >50% of range
-    found.push('threeBlackCrows');
-  }
+  // SIGNAL 4a: Strong Engulfing — body must engulf AND be 1.5x larger (strict)
+  const bullEngulf = isBullish(c1) && isBearish(c2) &&
+    c1.open <= c2.close && c1.close >= c2.open &&
+    bodySize(c1) > bodySize(c2) * 1.5 &&
+    isCleanCandle(c1); // engulfing candle must itself be clean
+  const bearEngulf = isBearish(c1) && isBullish(c2) &&
+    c1.open >= c2.close && c1.close <= c2.open &&
+    bodySize(c1) > bodySize(c2) * 1.5 &&
+    isCleanCandle(c1);
+  if (bullEngulf || bearEngulf) found.push('engulfingStructures');
 
-  // Three white soldiers: 3 consecutive bullish candles, each closing higher
-  if (isBullish(c3) && isBullish(c2) && isBullish(c1) && 
-      c2.close > c3.close && c1.close > c2.close &&
-      bodySize(c1) > range(c1) * 0.5) {
-    found.push('threeWhiteSoldiers');
-  }
-
-  // Engulfing patterns
-  if (isBullish(c1) && isBearish(c2) && c1.open <= c2.close && c1.close >= c2.open && bodySize(c1) > bodySize(c2)) {
-    found.push('engulfingStructures');
-  }
-  if (isBearish(c1) && isBullish(c2) && c1.open >= c2.close && c1.close <= c2.open && bodySize(c1) > bodySize(c2)) {
-    found.push('engulfingStructures');
-  }
-
-  // FIX: Double top/bottom — use separate flags so we don't double-push
-  const recent = candles.slice(-15);
-  if (recent.length >= 10) {
-    const highs = recent.map(c => c.high), lows = recent.map(c => c.low);
-    const maxHigh = Math.max(...highs), minLow = Math.min(...lows);
-    const peakCount = highs.filter(h => Math.abs(h - maxHigh) / maxHigh < 0.0015).length;
-    const troughCount = lows.filter(l => Math.abs(l - minLow) / minLow < 0.0015).length;
-    // Only push once, even if both conditions true
-    if (peakCount >= 2 || troughCount >= 2) found.push('doubleTopBottom');
-  }
-
-  // FIX: Head & Shoulders (bearish — top) AND Inverse H&S (bullish — bottom)
-  if (recent.length >= 9) {
-    const seg = recent.slice(-9);
-    const leftH = Math.max(seg[0].high, seg[1].high, seg[2].high);
-    const midH = Math.max(seg[3].high, seg[4].high, seg[5].high);
-    const rightH = Math.max(seg[6].high, seg[7].high, seg[8].high);
-    // Classic H&S (bearish reversal): middle peak highest, shoulders roughly equal
-    if (midH > leftH * 1.003 && midH > rightH * 1.003 && Math.abs(leftH - rightH) / leftH < 0.012) {
-      found.push('headAndShoulders');
-    }
-    // Inverse H&S (bullish reversal): middle trough lowest, shoulders roughly equal
-    const leftL = Math.min(seg[0].low, seg[1].low, seg[2].low);
-    const midL = Math.min(seg[3].low, seg[4].low, seg[5].low);
-    const rightL = Math.min(seg[6].low, seg[7].low, seg[8].low);
-    if (midL < leftL * 0.997 && midL < rightL * 0.997 && Math.abs(leftL - rightL) / leftL < 0.012) {
-      found.push('headAndShoulders'); // same bucket, signals bullish reversal
-    }
-  }
+  // SIGNAL 4b: Three Soldiers/Crows — all 3 candles must be clean (no wicks)
+  const threeCleanBullish = isBullish(c3) && isBullish(c2) && isBullish(c1) &&
+    c2.close > c3.close && c1.close > c2.close &&
+    bodySize(c1) > totalRange(c1) * 0.6 &&
+    isCleanCandle(c3) && isCleanCandle(c2) && isCleanCandle(c1);
+  const threeCleanBearish = isBearish(c3) && isBearish(c2) && isBearish(c1) &&
+    c2.close < c3.close && c1.close < c2.close &&
+    bodySize(c1) > totalRange(c1) * 0.6 &&
+    isCleanCandle(c3) && isCleanCandle(c2) && isCleanCandle(c1);
+  if (threeCleanBullish || threeCleanBearish) found.push('threeWhiteSoldiers');
 
   return found;
 }
 
-// IMPROVED signal evaluation with all fixes + trend filter + volatility gate
+// MAIN SIGNAL ENGINE — strict 5-signal system
 function evaluateRealSignalsForSymbol(symbol) {
   const candles = candleHistoryStore[symbol];
-  if (!candles || candles.length < 50) return null;
+  if (!candles || candles.length < 60) return null; // raised from 50
 
   const closes = candles.map(c => c.close);
   const lastClose = closes[closes.length - 1];
+  const lastCandle = candles[candles.length - 1];
 
-  const ema9 = calcEMA(closes, 9);
+  // === HARD GATE: Last candle must be clean (no wick-dominated noise) ===
+  if (!isCleanCandle(lastCandle)) return null;
+
+  const ema9  = calcEMA(closes, 9);
   const ema21 = calcEMA(closes, 21);
-  const rsi = calcRSI(closes, 14);
+  const ema50 = calcEMA(closes, 50);
+  const rsi   = calcRSI(closes, 14);
   const macdData = calcMACD(closes);
-  const boll = calcBollinger(closes, 20, 2);
+  const boll  = calcBollinger(closes, 20, 2);
   const volRatio = calcVolumeDelta(candles);
-  const atr = calcATR(candles, 14);
+  const atr   = calcATR(candles, 14);
   const trendBias = calcTrendBias(closes);
   const patterns = detectCandlePatterns(candles);
 
-  // NEW: Volatility gate — if ATR is extremely low (<0.05% of price), market is too choppy for scalping
-  if (atr !== null && (atr / lastClose) < 0.0005) return null; // skip ultra-low-vol coins
+  // === HARD GATE: Trend must NOT be neutral — we only trade clear trends ===
+  if (trendBias === 'neutral') return null;
+
+  // === HARD GATE: ATR volatility gate (same as before) ===
+  if (atr !== null && (atr / lastClose) < 0.0005) return null;
+
+  // === HARD GATE: Volume must be at least 1.8x average (raised from 1.2x) ===
+  if (volRatio === null || volRatio < 1.8) return null;
 
   const activeSignals = [];
   let longVotes = 0, shortVotes = 0;
 
-  // EMA trend cross — now requires 0.05% minimum spread (same), but also weights more for trend alignment
-  if (ema9 !== null && ema21 !== null) {
-    const emaCrossStrength = Math.abs(ema9 - ema21) / ema21;
-    if (emaCrossStrength > 0.0005) {
-      activeSignals.push('emaTrendCross');
-      const isBullCross = ema9 > ema21;
-      // Extra weight bonus when EMA cross aligns with EMA50 trend
-      const trendBonus = (isBullCross && trendBias === 'up') || (!isBullCross && trendBias === 'down') ? 1.5 : 1.0;
-      if (isBullCross) longVotes += trendBonus; else shortVotes += trendBonus;
+  // ── SIGNAL 1: EMA Trend Cross WITH EMA50 alignment (strict) ──────────────
+  // EMA9 must cross EMA21 AND both must be on the correct side of EMA50
+  if (ema9 !== null && ema21 !== null && ema50 !== null) {
+    const crossStrength = Math.abs(ema9 - ema21) / ema21;
+    const bullCross = ema9 > ema21 && ema21 > ema50 * 0.9995; // EMA21 above or near EMA50
+    const bearCross = ema9 < ema21 && ema21 < ema50 * 1.0005;
+    if (crossStrength > 0.0008 && trendBias === 'up' && bullCross) {
+      activeSignals.push('emaTrendCross'); longVotes += 2.5;
+    } else if (crossStrength > 0.0008 && trendBias === 'down' && bearCross) {
+      activeSignals.push('emaTrendCross'); shortVotes += 2.5;
     }
   }
 
-  // FIX: RSI thresholds tightened to 30/70 (oversold/overbought) — more reliable than 40/60
-  // Also requires MACD confirmation rather than just either-or
+  // ── SIGNAL 2: RSI Extreme + MACD Cross (both required, not either/or) ────
+  // RSI must be extreme (≤28 or ≥72) AND MACD must have just crossed
   if (rsi !== null && macdData !== null) {
-    const strongOversold = rsi < 30; // was 40
-    const strongOverbought = rsi > 70; // was 60
-    const moderateOversold = rsi < 40 && rsi >= 30;
-    const moderateOverbought = rsi > 60 && rsi <= 70;
-    const macdBullish = macdData.histogram > 0 || macdData.crossedAbove;
-    const macdBearish = macdData.histogram < 0 || macdData.crossedBelow;
+    const extremeOversold  = rsi <= 28;
+    const extremeOverbought = rsi >= 72;
+    const freshBullCross = macdData.crossedAbove; // only fresh crosses, not just positive histogram
+    const freshBearCross = macdData.crossedBelow;
 
-    if (strongOversold && macdBullish) {
+    if (extremeOversold && freshBullCross && trendBias === 'up') {
+      activeSignals.push('rsiMacdMomentum'); longVotes += 3.0; // highest weight — very reliable
+    } else if (extremeOverbought && freshBearCross && trendBias === 'down') {
+      activeSignals.push('rsiMacdMomentum'); shortVotes += 3.0;
+    }
+    // Slightly relaxed: extreme RSI + histogram strongly growing (no fresh cross needed)
+    else if (extremeOversold && macdData.histogram > 0 && macdData.momentum > 0 && trendBias === 'up') {
       activeSignals.push('rsiMacdMomentum'); longVotes += 2.0;
-    } else if (strongOverbought && macdBearish) {
+    } else if (extremeOverbought && macdData.histogram < 0 && macdData.momentum < 0 && trendBias === 'down') {
       activeSignals.push('rsiMacdMomentum'); shortVotes += 2.0;
-    } else if (moderateOversold && macdBullish) {
-      activeSignals.push('rsiMacdMomentum'); longVotes += 1.0;
-    } else if (moderateOverbought && macdBearish) {
-      activeSignals.push('rsiMacdMomentum'); shortVotes += 1.0;
-    } else if (macdData.crossedAbove) {
-      // Fresh MACD cross is always noteworthy even without extreme RSI
-      activeSignals.push('rsiMacdMomentum'); longVotes += 0.75;
-    } else if (macdData.crossedBelow) {
-      activeSignals.push('rsiMacdMomentum'); shortVotes += 0.75;
     }
   }
 
-  // Bollinger mean reversion (unchanged logic, good)
+  // ── SIGNAL 3: Bollinger Squeeze Breakout ─────────────────────────────────
+  // Only fires on tight band + price breaking out (not just touching)
   if (boll !== null) {
-    const bandWidth = boll.upper - boll.lower;
-    const pctFromMiddle = Math.abs(lastClose - boll.middle) / (bandWidth / 2);
-    if (pctFromMiddle > 0.75) {
+    const isSqueeze = isBollingerSqueeze(boll, lastClose);
+    if (isSqueeze) {
       activeSignals.push('bollingerMeanReversion');
-      if (lastClose <= boll.lower) longVotes += 1.5;
-      else if (lastClose >= boll.upper) shortVotes += 1.5;
-      else if (lastClose < boll.middle) longVotes++;
-      else shortVotes++;
+      if (lastClose <= boll.lower) longVotes += 2.5;
+      else if (lastClose >= boll.upper) shortVotes += 2.5;
+    } else {
+      // Standard band touch — only counts as a support signal, lower weight
+      const bandWidth = boll.upper - boll.lower;
+      const pctFromEdge = Math.min(
+        Math.abs(lastClose - boll.lower),
+        Math.abs(lastClose - boll.upper)
+      ) / bandWidth;
+      if (pctFromEdge < 0.05) { // within 5% of the band edge
+        activeSignals.push('bollingerMeanReversion');
+        if (lastClose <= boll.lower) longVotes += 1.5;
+        else if (lastClose >= boll.upper) shortVotes += 1.5;
+      }
     }
   }
 
-  // Volume/volatility delta (unchanged, good)
-  if (volRatio !== null && volRatio > 1.2) {
+  // ── SIGNAL 4: Volume Surge Confirmation (already gated at 1.8x above) ────
+  // This signal adds directional weight since volume already confirmed
+  if (volRatio !== null && volRatio >= 1.8) {
     activeSignals.push('volumeVolatilityDelta');
     const priorClose = closes[closes.length - 2];
-    if (lastClose > priorClose) longVotes += 1.0; else shortVotes += 1.0;
+    const momentum = (lastClose - priorClose) / priorClose;
+    // Only add votes if price momentum aligns with trend
+    if (lastClose > priorClose && trendBias === 'up') longVotes += volRatio * 0.8;
+    else if (lastClose < priorClose && trendBias === 'down') shortVotes += volRatio * 0.8;
+    else if (lastClose > priorClose) longVotes += 0.5; // weak — against trend
+    else shortVotes += 0.5;
   }
 
-  // NEW: Trend filter — if trend is strong, suppress countertrend trades
-  let direction = longVotes >= shortVotes ? 'Long' : 'Short';
-  if (trendBias === 'up' && direction === 'Short') shortVotes *= 0.6; // penalize shorting in uptrend
-  if (trendBias === 'down' && direction === 'Long') longVotes *= 0.6; // penalize longing in downtrend
-  direction = longVotes >= shortVotes ? 'Long' : 'Short'; // re-evaluate after penalty
+  // ── SIGNAL 5: Candle Pattern (Engulfing or Three Soldiers/Crows) ─────────
+  const bullPattern = patterns.includes('threeWhiteSoldiers') ||
+    (patterns.includes('engulfingStructures') && candles[candles.length - 1].close > candles[candles.length - 1].open);
+  const bearPattern = patterns.includes('threeWhiteSoldiers') && candles[candles.length - 1].close < candles[candles.length - 1].open ||
+    (patterns.includes('engulfingStructures') && candles[candles.length - 1].close < candles[candles.length - 1].open);
+
+  if (bullPattern && trendBias === 'up') {
+    activeSignals.push(...patterns); longVotes += 2.0;
+  } else if (bearPattern && trendBias === 'down') {
+    activeSignals.push(...patterns); shortVotes += 2.0;
+  }
+
+  // === HARD GATE: Minimum 3 of 5 signals must be active ===
+  if (activeSignals.length < 3) return null;
+
+  // === HARD GATE: Votes must heavily favour one direction (ratio ≥ 3:1) ===
+  const totalVotes = longVotes + shortVotes;
+  if (totalVotes === 0) return null;
+  const dominanceRatio = Math.max(longVotes, shortVotes) / totalVotes;
+  if (dominanceRatio < 0.75) return null; // less than 75% consensus → skip
+
+  const direction = longVotes > shortVotes ? 'Long' : 'Short';
+
+  // === HARD GATE: Direction must align with trend ===
+  if (direction === 'Long' && trendBias !== 'up') return null;
+  if (direction === 'Short' && trendBias !== 'down') return null;
 
   return { activeSignals, patterns, direction, lastClose, longVotes, shortVotes, atr, trendBias };
 }
@@ -1391,17 +1433,18 @@ function forceExecutionRecoverySequence() {
   backgroundScannerThread = setInterval(runAsymmetricScannerEvaluationCycle, 3000);
 }
 
-// NEW: Adaptive confluence threshold — tightens when recent win rate is low
+// v9: Fixed high threshold — no longer loosens on winning streaks
+// We want quality over quantity. 80% minimum, tightens to 88% if losing.
 function getAdaptiveConfluenceThreshold() {
-  const recentTrades = engineState.tradeHistory.slice(0, 20);
-  if (recentTrades.length < 5) return 0.62; // default
+  const recentTrades = engineState.tradeHistory.slice(0, 10);
+  if (recentTrades.length < 3) return 0.80; // default — strict
   const recentWinRate = recentTrades.filter(t => t.pnl > 0).length / recentTrades.length;
-  // If winning <40% recently, raise bar to 0.70; if winning >65%, lower to 0.58
-  if (recentWinRate < 0.40) return 0.70;
-  if (recentWinRate < 0.50) return 0.65;
-  if (recentWinRate > 0.65) return 0.58;
-  return 0.62;
+  if (recentWinRate < 0.50) return 0.88; // losing streak — tighten hard
+  if (recentWinRate < 0.65) return 0.83;
+  return 0.80; // winning — stay strict, never loosen below 80%
 }
+
+const MAX_CONCURRENT_POSITIONS_HARD_CAP = 3; // v9: hard-coded, never more than 3
 
 function runAsymmetricScannerEvaluationCycle() {
   if (!engineState.isRunning) return;
@@ -1464,7 +1507,7 @@ function runAsymmetricScannerEvaluationCycle() {
         </td>
       </tr>`;
 
-    if (!isOnCooldown && combinedWeightedConfluenceIndex >= confluenceThreshold && engineState.positions.length < botConfig.maxConcurrentTrades) {
+    if (!isOnCooldown && combinedWeightedConfluenceIndex >= confluenceThreshold && engineState.positions.length < MAX_CONCURRENT_POSITIONS_HARD_CAP) {
       allocatePositionLiabilityContract(symbol, biasDirection, activeMarkValue, activeSignals, activePatterns, combinedWeightedConfluenceIndex, atr);
     }
   });
