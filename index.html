@@ -97,7 +97,7 @@
   .metric-head { font-size: 11px; text-transform: uppercase; color: var(--color-muted); font-weight: 600; margin-bottom: 6px; }
   .metric-body { font-size: 22px; font-family: var(--font-mono); font-weight: 700; color: #fff; word-break: break-word; }
 
-  .table-panel { background-color: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; width: 100%; max-width: 100%; }
+  .table-panel { background-color: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; width: 100%; max-width: 100%; flex-shrink: 0; }
   .table-header-title { padding: 14px 20px; background-color: rgba(0,0,0,0.2); font-weight: 700; color: #fff; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
   
   .table-scroll-wrap { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
@@ -218,6 +218,13 @@
     .metric-head { font-size: 9px; }
   }
 
+  /* Precision Signal Lab stat grid — was fixed at 5 cols via inline style, never adapted on small screens */
+  @media (max-width: 1100px) { .sl-stat-grid { grid-template-columns: repeat(3, 1fr) !important; } }
+  @media (max-width: 600px)  { .sl-stat-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 6px !important; } }
+  .fvg-stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  @media (max-width: 1100px) { .fvg-stat-grid { grid-template-columns: repeat(2, 1fr) !important; } }
+  .fvg-conf-badge { display:inline-flex; align-items:center; gap:4px; font-family: var(--font-mono); font-size:10px; font-weight:700; padding:2px 8px; border-radius:10px; }
+
   /* Landscape phone — give more horizontal room */
   @media (max-width: 900px) and (orientation: landscape) and (max-height: 500px) {
     .top-status-bar { height: 40px; }
@@ -292,10 +299,13 @@
         <div class="nav-item active" data-target="pane-dashboard" onclick="switchActiveViewPort(this)">Live Market Feed</div>
         <div class="nav-item" data-target="pane-positions" onclick="switchActiveViewPort(this)">Active Risk Matrix</div>
         <div class="nav-item" data-target="pane-daily-ledger" onclick="switchActiveViewPort(this)">Daily Trade History</div>
+        <div class="nav-item" data-target="pane-sl-ledger" onclick="switchActiveViewPort(this); renderSlLedgerModules();" style="color:#60a5fa;">📊 Signal Lab Record</div>
+        <div class="nav-item" data-target="pane-fvg-ledger" onclick="switchActiveViewPort(this); renderFvgLedgerModules();" style="color:#c084fc;">📊 FVG Record</div>
         <div class="nav-item" data-target="pane-strategy-intelligence" onclick="switchActiveViewPort(this)">Strategy Intelligence</div>
         <div class="nav-item" data-target="pane-best-trades" onclick="switchActiveViewPort(this)">Average Best Trades Detail</div>
         <div class="nav-item" data-target="pane-market-news" onclick="switchActiveViewPort(this)">Market News & Sentiment</div>
         <div class="nav-item" data-target="pane-signal-lab" onclick="switchActiveViewPort(this); runSignalLabScan();" style="background: linear-gradient(90deg, rgba(37,99,235,0.18) 0%, rgba(16,185,129,0.10) 100%); border: 1px solid rgba(37,99,235,0.35); color: #60a5fa; font-weight: 700;">⚡ Precision Signal Lab</div>
+        <div class="nav-item" data-target="pane-fvg-strategy" onclick="switchActiveViewPort(this); initFvgStrategyTab();" style="background: linear-gradient(90deg, rgba(168,85,247,0.18) 0%, rgba(236,72,153,0.10) 100%); border: 1px solid rgba(168,85,247,0.35); color: #c084fc; font-weight: 700;">📐 FVG Strategy</div>
         <div class="nav-item" data-target="pane-logs" onclick="switchActiveViewPort(this)">System Telemetry</div>
       </nav>
     </div>
@@ -434,6 +444,26 @@
 
     <section class="view-pane" id="pane-daily-ledger">
       <div style="display:flex; flex-direction:column; gap:16px;" id="daily-ledger-canvas-container"></div>
+    </section>
+
+    <section class="view-pane" id="pane-sl-ledger">
+      <div class="stats-grid" id="sl-ledger-summary-grid">
+        <div class="card-metric"><div class="metric-head">Total Trades</div><div class="metric-body" id="sl-ledger-total">0</div></div>
+        <div class="card-metric"><div class="metric-head">Wins</div><div class="metric-body green-text" id="sl-ledger-wins">0</div></div>
+        <div class="card-metric"><div class="metric-head">Losses</div><div class="metric-body red-text" id="sl-ledger-losses">0</div></div>
+        <div class="card-metric"><div class="metric-head">Win Rate</div><div class="metric-body" id="sl-ledger-winrate">0.0%</div></div>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:16px;" id="sl-ledger-canvas-container"></div>
+    </section>
+
+    <section class="view-pane" id="pane-fvg-ledger">
+      <div class="stats-grid" id="fvg-ledger-summary-grid">
+        <div class="card-metric"><div class="metric-head">Total Trades</div><div class="metric-body" id="fvg-ledger-total">0</div></div>
+        <div class="card-metric"><div class="metric-head">Wins</div><div class="metric-body green-text" id="fvg-ledger-wins">0</div></div>
+        <div class="card-metric"><div class="metric-head">Losses</div><div class="metric-body red-text" id="fvg-ledger-losses">0</div></div>
+        <div class="card-metric"><div class="metric-head">Win Rate</div><div class="metric-body" id="fvg-ledger-winrate">0.0%</div></div>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:16px;" id="fvg-ledger-canvas-container"></div>
     </section>
 
     <section class="view-pane" id="pane-strategy-intelligence">
@@ -687,6 +717,82 @@
 
     </section>
 
+    <section class="view-pane" id="pane-fvg-strategy">
+      <div class="fvg-stat-grid">
+        <div class="card-metric"><div class="metric-head">FVG Pairs Scanned</div><div class="metric-body" id="fvg-stat-scanned">—</div></div>
+        <div class="card-metric"><div class="metric-head">Bullish Imbalances</div><div class="metric-body" id="fvg-stat-bull" style="color:var(--color-green);">—</div></div>
+        <div class="card-metric"><div class="metric-head">Bearish Imbalances</div><div class="metric-body" id="fvg-stat-bear" style="color:var(--color-red);">—</div></div>
+        <div class="card-metric">
+          <div class="metric-head">Scan Frequency</div>
+          <button class="btn btn-secondary" style="width:100%; margin-top:2px; font-size:11px;" id="fvg-rescan-btn" onclick="runFvgScan()">⚡ Force Rescan</button>
+        </div>
+      </div>
+
+      <div class="table-panel">
+        <div class="table-header-title" style="background: rgba(168,85,247,0.08); flex-wrap:wrap; gap:10px;">
+          <span style="color:#c084fc; font-weight:700;">📐 High-Probability FVG Signal Matrix (Auto-Trades 80%+ Confidence)</span>
+          <div style="display:flex; align-items:center; gap:10px; font-size:11px;">
+            <label style="display:flex; align-items:center; gap:5px; color:var(--color-muted); cursor:pointer;">
+              <input type="checkbox" id="fvg-auto-execute" checked> Auto-Execute ≥80% signals
+            </label>
+            <span id="fvg-last-scan" style="font-family:var(--font-mono); color:var(--color-muted);">Not scanned yet</span>
+          </div>
+        </div>
+        <div class="table-scroll-wrap" style="max-height:420px; overflow-y:auto;">
+          <table style="min-width:1000px;">
+            <thead style="position:sticky; top:0; z-index:2; background-color:var(--bg-surface);">
+              <tr>
+                <th>Asset Symbol</th>
+                <th>Signal Type</th>
+                <th>Calculated Entry</th>
+                <th>Stop Loss (SL)</th>
+                <th>Take Profit (TP)</th>
+                <th>Macro Trend Confluence</th>
+                <th>Validation Context</th>
+                <th>Confidence</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="fvg-signals-tbody">
+              <tr><td colspan="9" style="text-align:center; padding:40px; color:var(--color-muted); font-family:var(--font-mono);">Opening this tab triggers an automatic full-spectrum FVG scan...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="table-panel" style="overflow:hidden;">
+        <div class="table-header-title" style="flex-wrap:wrap; gap:8px;">
+          <span>FVG Live Open Positions</span>
+          <span style="font-size:11px; color:var(--color-muted); font-weight:400;">← Scroll horizontally for all columns →</span>
+          <span id="fvg-pos-count-badge" style="font-family:var(--font-mono); font-size:11px; background:rgba(168,85,247,0.15); color:#c084fc; padding:2px 8px; border-radius:10px;">0 open</span>
+        </div>
+        <div class="table-scroll-wrap" style="overflow-x:auto; -webkit-overflow-scrolling:touch; max-height:60vh; overflow-y:auto;">
+          <table style="min-width:1150px;">
+            <thead style="position:sticky; top:0; z-index:10; background:var(--bg-surface);">
+              <tr>
+                <th style="min-width:110px;">Asset</th>
+                <th style="min-width:90px;">Direction</th>
+                <th style="min-width:110px;">Entry Price</th>
+                <th style="min-width:110px;">Live Price</th>
+                <th style="min-width:110px;">Live TP</th>
+                <th style="min-width:110px;">Live SL</th>
+                <th style="min-width:90px;">Hold Time</th>
+                <th style="min-width:150px;">Live PnL</th>
+                <th style="min-width:180px;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="fvg-positions-tbody">
+              <tr><td colspan="9" style="text-align:center; color:var(--color-muted); padding:30px;">No FVG positions open — auto-execute will fill this once a fresh 80%+ confidence gap signal is found.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div style="font-size:10px; color:var(--color-muted); font-family:var(--font-mono); line-height:1.6;">
+        FVG = Fair Value Gap: a 3-candle price imbalance where candle 1's wick doesn't overlap candle 3's wick. This engine scans your full coin universe for fresh, unmitigated gaps, scores them against trend, gap size (ATR-relative), freshness, and impulse volume, then auto-opens the highest-confidence setups as their own independent trade pool (separate balance/position cap from the main engine — closing one here never affects your Precision Signal Lab or main scanner positions).
+      </div>
+    </section>
+
     <section class="view-pane" id="pane-logs">
       <div class="table-panel" style="flex:1; display:flex; flex-direction:column;">
         <div class="table-header-title">System Execution Telemetry Stream Logging Feed</div>
@@ -824,7 +930,7 @@ let botConfig = {
 
 let engineState = {
   isRunning: false, walletBalance: 10000.00, positions: [], tradeHistory: [], logs: [],
-  rowBeingEdited: null, bestTradesBatches: [],
+  rowBeingEdited: null, bestTradesBatches: [], lastSavedAt: 0,
   // v9: Only 5 precision signals — equal starting weight, learned over time
   signalWeights: { emaTrendCross: 25, rsiMacdMomentum: 25, bollingerMeanReversion: 25, volumeVolatilityDelta: 25 },
   patternWeights: { engulfingStructures: 25, threeWhiteSoldiers: 25 },
@@ -968,6 +1074,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   systemTickerDataStream = setInterval(async () => {
     await updateLivePricesFromPublicFuturesAPI();
     if (engineState.positions.length > 0) processActiveExposureRiskBoundaries();
+    if (fvgState.positions.length > 0) { fvgProcessRiskBoundaries(); fvgSyncPositionsView(); }
     syncGlobalInterfaceMatrixViewports();
   }, 2000);
 
@@ -976,9 +1083,18 @@ window.addEventListener('DOMContentLoaded', async () => {
   syncGlobalInterfaceMatrixViewports();
   renderStrategyIntelligenceMatrixTable();
   renderDailyLedgerModules();
+  renderSlLedgerModules();
+  renderFvgLedgerModules();
   renderBestTradesPane();
 
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMobileSidebar(); });
+
+  // Flush any pending debounced cloud save immediately before the page is hidden/closed/refreshed —
+  // closes the race window that previously let a stale cloud snapshot silently wipe open positions.
+  const flushBeforeExit = () => { try { clearTimeout(saveEngineStateToCache._timer); saveEngineStateToCache(true); } catch(e) {} };
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushBeforeExit(); });
+  window.addEventListener('pagehide', flushBeforeExit);
+  window.addEventListener('beforeunload', flushBeforeExit);
 
   let touchStartX = 0;
   document.addEventListener('touchstart', e => { touchStartX = e.touches[0].clientX; }, { passive: true });
@@ -1038,6 +1154,7 @@ function loadCachedEngineStateData() {
       if (parsed.engineState) engineState = parsed.engineState;
       if (!('rowBeingEdited' in engineState)) engineState.rowBeingEdited = null;
       if (!('bestTradesBatches' in engineState)) engineState.bestTradesBatches = [];
+      if (!('lastSavedAt' in engineState)) engineState.lastSavedAt = 0;
       if (!botConfig.targetTimeframe) botConfig.targetTimeframe = "1m";
     } catch (err) { console.error("Local cache corrupted.", err); }
   }
@@ -1050,11 +1167,24 @@ async function loadCloudEngineState() {
     const record = await b4aGet("DeviceState", { deviceId: DEVICE_ID });
     if (record && record.data) {
       const parsed = typeof record.data === "string" ? JSON.parse(record.data) : record.data;
+      const cloudTs = (parsed.engineState && parsed.engineState.lastSavedAt) || 0;
+      const localTs = (engineState && engineState.lastSavedAt) || 0;
+      if (cloudTs < localTs) {
+        // Cloud snapshot is OLDER than what's already loaded locally (e.g. the debounced cloud
+        // push from a recently-opened position hadn't landed yet before this refresh).
+        // Applying it here would silently "close" open positions without hitting TP/SL.
+        // Keep the fresher local state instead, and push it up so the cloud catches up.
+        pushTerminalLog("CLOUD", `⚠️ Cloud snapshot older than local state — keeping local positions, re-syncing cloud.`);
+        setCloudStatus(true);
+        saveEngineStateToCache(true);
+        return;
+      }
       if (parsed.botConfig) botConfig = parsed.botConfig;
       if (parsed.engineState) {
         engineState = parsed.engineState;
         if (!('rowBeingEdited' in engineState)) engineState.rowBeingEdited = null;
         if (!('bestTradesBatches' in engineState)) engineState.bestTradesBatches = [];
+        if (!('lastSavedAt' in engineState)) engineState.lastSavedAt = cloudTs;
       }
       if (!botConfig.targetTimeframe) botConfig.targetTimeframe = "1m";
       // Mirror to localStorage for next fast-boot
@@ -1079,12 +1209,19 @@ async function loadCloudEngineState() {
   }
 }
 
-function saveEngineStateToCache() {
+function saveEngineStateToCache(immediate) {
   // Always save locally for instant reload
+  engineState.lastSavedAt = Date.now();
   localStorage.setItem(BOT_CACHE_STORAGE_KEY, JSON.stringify({ botConfig, engineState }));
-  // Debounced cloud save (avoid hammering API on rapid ticks)
+  // Debounced cloud save (avoid hammering API on rapid ticks) — unless an immediate flush
+  // was requested (used right after opening/closing a position, and on tab close), in which
+  // case we push straight away to shrink the race window that caused stale-cloud overwrites.
   clearTimeout(saveEngineStateToCache._timer);
-  saveEngineStateToCache._timer = setTimeout(saveCloudEngineState, 1500);
+  if (immediate) {
+    saveCloudEngineState();
+  } else {
+    saveEngineStateToCache._timer = setTimeout(saveCloudEngineState, 600);
+  }
 }
 
 async function saveCloudEngineState() {
@@ -1696,7 +1833,7 @@ function allocatePositionLiabilityContract(symbol, side, entryPrice, signalsUsed
   engineState.positions.push(openLiabilityPositionContractObject);
   const atrNote = atr ? ` [ATR-dynamic TP/SL]` : ` [Fixed % TP/SL]`;
   pushTerminalLog("FAST_OPEN", `Dispatched Scalp Contract: ${symbol} <span class="${side==='Long'?'trend-long':'trend-short'}">${side} x${botConfig.defaultLeverage}</span>${atrNote}.`);
-  saveEngineStateToCache();
+  saveEngineStateToCache(true);
   syncGlobalInterfaceMatrixViewports();
 }
 
@@ -1782,9 +1919,10 @@ function settleTerminatedContractPosition(targetContractUid, structuralExitReaso
   symbolCooldownMap[positionInstance.symbol] = Date.now() + SYMBOL_COOLDOWN_MS;
 
   pushTerminalLog("SETTLEMENT", `Settle Complete: ${positionInstance.symbol}. Net yield: <span class="${isProfitableOutcome?'green-text':'red-text'}">${computedAbsoluteYieldResult.toFixed(2)} USDT</span>`);
-  saveEngineStateToCache();
+  saveEngineStateToCache(true);
   syncGlobalInterfaceMatrixViewports();
   renderDailyLedgerModules();
+  renderSlLedgerModules();
   renderStrategyIntelligenceMatrixTable();
   evaluateBestTradesMilestone();
 }
@@ -2029,6 +2167,107 @@ function renderBestTradesPane() {
     });
 
     containerWrapperElement.innerHTML = generatedInnerHtmlBuffer;
+  }
+
+  // ---- Generic ledger table builder, reused by Signal Lab Record + FVG Record tabs ----
+  // Expects normalized flat trade objects: { openTimestampStr, timestamp, durationStr, symbol,
+  // direction, entryPrice, exitPrice, margin, leverage, volume, pnl, reason, dateStr, confidence }
+  function buildEngineLedgerHtml(trades, workspaceLabel, accentColor) {
+    if (!trades.length) {
+      return `<div class="table-panel"><div class="table-header-title">${workspaceLabel}</div><div style="padding:40px; text-align:center; color:var(--color-muted);">No finalized trades logged yet for this engine. Keep it running to stack data...</div></div>`;
+    }
+    const entryFmt = (p) => p == null ? '—' : (p < 0.001 ? p.toFixed(6) : p < 1 ? p.toFixed(5) : p < 10 ? p.toFixed(4) : p < 1000 ? p.toFixed(3) : p.toFixed(2));
+    let dateBucketsMap = {};
+    trades.forEach(t => {
+      const key = t.dateStr || new Date().toLocaleDateString();
+      if (!dateBucketsMap[key]) dateBucketsMap[key] = { ops: [], wins: 0, losses: 0, vol: 0, pnl: 0 };
+      dateBucketsMap[key].ops.push(t);
+      dateBucketsMap[key].vol += (t.volume || 0);
+      dateBucketsMap[key].pnl += t.pnl;
+      if (t.pnl > 0) dateBucketsMap[key].wins++; else dateBucketsMap[key].losses++;
+    });
+    let html = '';
+    Object.keys(dateBucketsMap).sort((a, b) => new Date(b) - new Date(a)).forEach(dateKey => {
+      const c = dateBucketsMap[dateKey];
+      html += `
+        <div class="table-panel">
+          <div class="table-header-title" style="background:#111622; color:#fff;">
+            <span>${workspaceLabel}: <b style="font-family:var(--font-mono); color:${accentColor};">${dateKey}</b></span>
+          </div>
+          <div class="daily-summary-bar">
+            <div><span class="control-label">Total Volume Trades</span><br><b style="font-size:14px; font-family:var(--font-mono); color:#fff;">${c.ops.length} Positions</b></div>
+            <div><span class="control-label">Profitable Terminations</span><br><b style="font-size:14px; font-family:var(--font-mono); color:var(--color-green);">${c.wins} Wins</b></div>
+            <div><span class="control-label">Contained Losses</span><br><b style="font-size:14px; font-family:var(--font-mono); color:var(--color-red);">${c.losses} Losses</b></div>
+            <div><span class="control-label">Aggregate Volume</span><br><b style="font-size:14px; font-family:var(--font-mono); color:#fff;">$${c.vol.toFixed(2)}</b></div>
+            <div><span class="control-label">Net Performance Delta</span><br><b style="font-size:14px; font-family:var(--font-mono);" class="${c.pnl>=0?'green-text':'red-text'}">${c.pnl>=0?'+':''}$${c.pnl.toFixed(2)}</b></div>
+          </div>
+          <div class="table-scroll-wrap">
+          <table style="min-width:1050px;">
+            <thead>
+              <tr>
+                <th>Opened</th><th>Closed</th><th>Duration</th><th>Asset Pair</th><th>Direction</th>
+                <th>Entry → Exit</th><th>Margin / Lev</th><th>Confidence</th><th>Realized PnL</th><th>Exit Reason</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${c.ops.map(t => `
+                <tr>
+                  <td class="text-mono" style="color:var(--color-muted); white-space:nowrap;">${t.openTimestampStr || t.timestamp}</td>
+                  <td class="text-mono" style="color:var(--color-muted); white-space:nowrap;">${t.timestamp}</td>
+                  <td class="text-mono" style="color:var(--color-yellow); white-space:nowrap;">${t.durationStr || '—'}</td>
+                  <td class="text-mono" style="font-weight:700; color:#fff;">${t.symbol}</td>
+                  <td><span class="${t.direction==='Long'?'trend-long':'trend-short'}">${t.direction}</span></td>
+                  <td class="text-mono" style="font-size:11px;">
+                    <div>In: <span style="color:#fff;">${entryFmt(t.entryPrice)}</span></div>
+                    <div>Out: <span style="color:var(--color-yellow);">${entryFmt(t.exitPrice)}</span></div>
+                  </td>
+                  <td class="text-mono" style="font-size:11px;">
+                    <div><b style="color:#fff;">${t.margin != null ? t.margin.toFixed(2) : '—'} USDT</b></div>
+                    <div style="color:var(--color-muted);">x${t.leverage || '—'}</div>
+                  </td>
+                  <td class="text-mono" style="font-size:11px; color:${accentColor};">${t.confidence != null ? t.confidence + '%' : '—'}</td>
+                  <td class="text-mono ${t.pnl>=0?'green-text':'red-text'}" style="font-weight:700;">${t.pnl>=0?'+':''}${t.pnl.toFixed(2)} USDT</td>
+                  <td style="color:var(--color-muted); font-size:11px; max-width:180px;">${t.reason}</td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+          </div>
+        </div>`;
+    });
+    return html;
+  }
+
+  function renderSlLedgerModules() {
+    const container = document.getElementById('sl-ledger-canvas-container');
+    if (!container) return;
+    const trades = engineState.tradeHistory
+      .filter(t => t.snapshot && t.snapshot.sourceTag === 'signal_lab')
+      .map(t => ({
+        openTimestampStr: t.openTimestampStr, timestamp: t.timestamp, durationStr: t.durationStr,
+        symbol: t.symbol, direction: t.direction, entryPrice: t.entryPrice, exitPrice: t.exitPrice,
+        margin: t.margin, leverage: t.leverage, volume: t.volume, pnl: t.pnl, reason: t.reason,
+        dateStr: t.dateStr, confidence: t.snapshot.scoreIndex
+      }));
+    const wins = trades.filter(t => t.pnl > 0).length;
+    const total = trades.length;
+    document.getElementById('sl-ledger-total').textContent = total;
+    document.getElementById('sl-ledger-wins').textContent = wins;
+    document.getElementById('sl-ledger-losses').textContent = total - wins;
+    document.getElementById('sl-ledger-winrate').textContent = total > 0 ? `${((wins/total)*100).toFixed(1)}%` : '0.0%';
+    container.innerHTML = buildEngineLedgerHtml(trades, '⚡ Precision Signal Lab Ledger', '#60a5fa');
+  }
+
+  function renderFvgLedgerModules() {
+    const container = document.getElementById('fvg-ledger-canvas-container');
+    if (!container) return;
+    const trades = fvgState.tradeHistory;
+    const wins = trades.filter(t => t.pnl > 0).length;
+    const total = trades.length;
+    document.getElementById('fvg-ledger-total').textContent = total;
+    document.getElementById('fvg-ledger-wins').textContent = wins;
+    document.getElementById('fvg-ledger-losses').textContent = total - wins;
+    document.getElementById('fvg-ledger-winrate').textContent = total > 0 ? `${((wins/total)*100).toFixed(1)}%` : '0.0%';
+    container.innerHTML = buildEngineLedgerHtml(trades, '📐 FVG Strategy Ledger', '#c084fc');
   }
 
   function syncGlobalInterfaceMatrixViewports() {
@@ -3096,7 +3335,7 @@ function renderBestTradesPane() {
     const atrVal = sig.atrPct > 0 ? (livePrice * sig.atrPct / 100) : null;
     allocatePositionLiabilityContract(sig.symbol, sig.direction, livePrice, allInd.length>0?allInd:['SignalLab'], allPat.length>0?allPat:['NONE'], parseFloat(sig.confidence)/100, atrVal);
     const pos = engineState.positions.find(p => p.symbol === sig.symbol);
-    if (pos) { pos.tp = parseFloat(sig.tp.toPrecision(8)); pos.sl = parseFloat(sig.sl.toPrecision(8)); pos.scoreIndex = sig.confidence; saveEngineStateToCache(); }
+    if (pos) { pos.tp = parseFloat(sig.tp.toPrecision(8)); pos.sl = parseFloat(sig.sl.toPrecision(8)); pos.scoreIndex = sig.confidence; pos.sourceTag = 'signal_lab'; pos.slLabTags = pos.slLabTags || [...sig.trendIndicators, ...sig.momentumIndicators, ...sig.volatilityIndicators, ...sig.structureIndicators]; saveEngineStateToCache(true); }
     pushTerminalLog("SIGNAL_LAB", `✅ Auto-executed ${sig.direction} on ${sig.symbol} @ ${livePrice.toFixed(4)} · TP: ${sig.tp.toPrecision(6)} · SL: ${sig.sl.toPrecision(6)} · Conf: ${sig.confidence}%`);
     // Re-render cards so button changes to "Position Open"
     renderSlSignalCards(window._slSignals);
@@ -3170,7 +3409,7 @@ function renderBestTradesPane() {
 
     engineState.positions.push(position);
     pushTerminalLog("SIGNAL_LAB", `✅ Executed from Signal Lab: ${sig.symbol} <span class="${sig.direction==='Long'?'trend-long':'trend-short'}">${sig.direction}</span> x${botConfig.defaultLeverage} @ ${sig.price} — TP ${sig.tp.toPrecision(6)} / SL ${sig.sl.toPrecision(6)} (Confidence ${sig.confidence}%).`);
-    saveEngineStateToCache();
+    saveEngineStateToCache(true);
     syncGlobalInterfaceMatrixViewports();
 
     const btn = document.getElementById(`sl-exec-btn-${idx}`);
@@ -3291,7 +3530,366 @@ function renderBestTradesPane() {
   // END PRECISION SIGNAL LAB
   // ============================================================
 
+  // ============================================================
+  // FVG STRATEGY — Fair Value Gap engine (independent trade pool)
+  // Real 3-candle imbalance detection, scored against trend/ATR/
+  // freshness/volume, auto-executes 80%+ confidence fresh gaps.
+  // Completely separate from engineState.positions (own balance,
+  // own cap) per requirements — never affects the main engine.
+  // ============================================================
+
+  const FVG_CACHE_KEY = "FvgStrategyEngine_v1";
+  const FVG_MAX_POSITIONS = 6;
+  const FVG_STARTING_BALANCE = 5000.00;
+  const FVG_AUTO_CONFIDENCE_GATE = 80;
+  const FVG_LIST_CONFIDENCE_GATE = 60;
+
+  let fvgState = { walletBalance: FVG_STARTING_BALANCE, positions: [], tradeHistory: [], lastSavedAt: 0 };
+  let fvgIsScanning = false;
+  let fvgTabInitialized = false;
+  let fvgScannerThread = null;
+  window._fvgSignals = [];
+
+  function fvgLoadCache() {
+    try {
+      const raw = localStorage.getItem(FVG_CACHE_KEY);
+      if (raw) { const parsed = JSON.parse(raw); if (parsed) fvgState = parsed; }
+    } catch (e) { console.warn("FVG cache corrupted", e); }
+    if (!fvgState.positions) fvgState.positions = [];
+    if (!fvgState.tradeHistory) fvgState.tradeHistory = [];
+    if (typeof fvgState.walletBalance !== 'number') fvgState.walletBalance = FVG_STARTING_BALANCE;
+  }
+  function fvgSaveCache() {
+    fvgState.lastSavedAt = Date.now();
+    try { localStorage.setItem(FVG_CACHE_KEY, JSON.stringify(fvgState)); } catch (e) {}
+  }
+  fvgLoadCache();
+
+  // ---- Core 3-candle Fair Value Gap detector ----
+  // Bullish FVG: candle[i-2].high < candle[i].low  → gap = [c0.high, c2.low]
+  // Bearish FVG: candle[i-2].low  > candle[i].high  → gap = [c2.high, c0.low]
+  function detectFairValueGaps(candles) {
+    const gaps = [];
+    if (!candles || candles.length < 20) return gaps;
+    const lastIdx = candles.length - 1;
+    const lookback = Math.min(60, candles.length - 2);
+    for (let i = candles.length - 1; i >= candles.length - lookback; i--) {
+      if (i < 2) break;
+      const c0 = candles[i - 2], c1 = candles[i - 1], c2 = candles[i];
+      if (c0.high < c2.low) {
+        gaps.push({ type: 'bullish', top: c2.low, bottom: c0.high, midIdx: i - 1, gapIdx: i, impulseCandle: c1, size: c2.low - c0.high });
+      } else if (c0.low > c2.high) {
+        gaps.push({ type: 'bearish', top: c0.low, bottom: c2.high, midIdx: i - 1, gapIdx: i, impulseCandle: c1, size: c0.low - c2.high });
+      }
+    }
+    // Drop gaps already fully mitigated (price has since closed back through the whole zone)
+    return gaps.filter(g => {
+      let mitigated = false;
+      for (let j = g.gapIdx + 1; j <= lastIdx; j++) {
+        const c = candles[j];
+        if (g.type === 'bullish' && c.close < g.bottom) { mitigated = true; break; }
+        if (g.type === 'bearish' && c.close > g.top) { mitigated = true; break; }
+      }
+      return !mitigated;
+    });
+  }
+
+  function fvgFmtPrice(p) {
+    if (p == null) return '—';
+    return p < 0.0001 ? p.toPrecision(4) : p < 0.001 ? p.toPrecision(5) : p < 0.1 ? p.toPrecision(5) : p < 10 ? p.toFixed(4) : p < 1000 ? p.toFixed(3) : p.toFixed(2);
+  }
+
+  function fvgEvaluateSymbol(symbol, candles) {
+    if (!candles || candles.length < 60) return null;
+    const closes = candles.map(c => c.close);
+    const last = closes[closes.length - 1];
+    const lastIdx = candles.length - 1;
+
+    const gaps = detectFairValueGaps(candles);
+    if (!gaps.length) return null;
+
+    const ema21 = calcEMA(closes, 21);
+    const ema50 = calcEMA(closes, 50);
+    const atr = calcATR(candles, 14) || (last * 0.004);
+    const volRatio = calcVolumeDelta(candles) || 1;
+    let trendBias = 'neutral';
+    if (ema21 && ema50) { if (ema21 > ema50 * 1.0005) trendBias = 'up'; else if (ema21 < ema50 * 0.9995) trendBias = 'down'; }
+
+    // Pick the freshest gap whose zone the current price has tagged/retraced into (entry trigger),
+    // preferring the most recent gap if multiple qualify.
+    let best = null;
+    gaps.sort((a, b) => b.gapIdx - a.gapIdx);
+    for (const g of gaps) {
+      const direction = g.type === 'bullish' ? 'Long' : 'Short';
+      const inZone = last <= g.top * 1.0015 && last >= g.bottom * 0.9985;
+      const candlesSinceGap = lastIdx - g.gapIdx;
+      if (!inZone && candlesSinceGap > 3) continue; // only fresh gaps or price currently retesting
+
+      const trendAligned = (direction === 'Long' && trendBias === 'up') || (direction === 'Short' && trendBias === 'down');
+      const freshnessScore = Math.max(0, 25 - candlesSinceGap * 3); // fresher = higher
+      const gapSizeAtrRatio = g.size / atr;
+      const sizeScore = Math.min(gapSizeAtrRatio * 18, 28);
+      const impulseBody = Math.abs(g.impulseCandle.close - g.impulseCandle.open);
+      const impulseDirOk = direction === 'Long' ? g.impulseCandle.close > g.impulseCandle.open : g.impulseCandle.close < g.impulseCandle.open;
+      const volumeScore = Math.min((volRatio - 1) * 8, 12);
+      const trendScore = trendAligned ? 22 : (trendBias === 'neutral' ? 8 : 0);
+      const impulseScore = impulseDirOk ? 10 : 2;
+
+      let confidence = 35 + freshnessScore + sizeScore + Math.max(volumeScore, 0) + trendScore + impulseScore;
+      confidence = Math.min(Math.max(confidence, 0), 98);
+      if (!best || confidence > best.confidence) {
+        const entry = last;
+        const slBuffer = atr * 0.25;
+        const sl = direction === 'Long' ? g.bottom - slBuffer : g.top + slBuffer;
+        const measuredMove = Math.max(g.size * 2.2, atr * 1.8);
+        const tp = direction === 'Long' ? entry + measuredMove : entry - measuredMove;
+        const rrRatio = Math.abs(tp - entry) / Math.abs(entry - sl || 1e-9);
+        best = {
+          symbol, direction, price: entry, tp, sl, rrRatio: rrRatio.toFixed(2),
+          confidence, gapType: g.type, gapTop: g.top, gapBottom: g.bottom,
+          trendBias, candlesSinceGap, atr,
+          validation: gapSizeAtrRatio >= 1.4 ? (trendAligned ? 'Discount (High Prob)' : 'Discount (Cheap)') : (trendAligned ? 'Premium (Expensive)' : 'Premium (Expensive)')
+        };
+      }
+    }
+    return best;
+  }
+
+  async function runFvgScan() {
+    if (fvgIsScanning) return;
+    fvgIsScanning = true;
+    const btn = document.getElementById('fvg-rescan-btn');
+    if (btn) { btn.textContent = '⟳ Scanning...'; btn.disabled = true; }
+    try {
+      await runFvgScanInner();
+    } catch (err) {
+      console.error("FVG scan error:", err);
+      pushTerminalLog("FVG", `⚠️ Scan failed: ${(err && err.message) ? err.message : String(err)}`);
+    } finally {
+      if (btn) { btn.textContent = '⚡ Force Rescan'; btn.disabled = false; }
+      fvgIsScanning = false;
+    }
+  }
+
+  async function runFvgScanInner() {
+    const universe = tradeAssetWatchlist.length > 0 ? tradeAssetWatchlist : ['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT'];
+    const tf = botConfig.targetTimeframe || '5m';
+
+    const BATCH = 15;
+    for (let i = 0; i < universe.length; i += BATCH) {
+      const batch = universe.slice(i, i + BATCH);
+      await Promise.all(batch.map(async sym => {
+        if (slCandleCache[sym] && slCandleCache[sym].length >= 60) return; // reuse Signal Lab's cache when fresh
+        try {
+          const url = `https://fapi.binance.com/fapi/v1/klines?symbol=${sym}&interval=${tf}&limit=100`;
+          const res = await fetch(url);
+          if (!res.ok) return;
+          const raw = await res.json();
+          slCandleCache[sym] = raw.map(c => ({ time: c[0], open: parseFloat(c[1]), high: parseFloat(c[2]), low: parseFloat(c[3]), close: parseFloat(c[4]), volume: parseFloat(c[5]) }));
+        } catch (e) {}
+      }));
+      await new Promise(r => setTimeout(r, 120));
+    }
+    universe.forEach(sym => { if (!slCandleCache[sym] && candleHistoryStore[sym]) slCandleCache[sym] = candleHistoryStore[sym]; });
+
+    const allSignals = [];
+    universe.forEach(sym => {
+      const candles = slCandleCache[sym];
+      const sig = fvgEvaluateSymbol(sym, candles);
+      if (sig && sig.confidence >= FVG_LIST_CONFIDENCE_GATE) allSignals.push(sig);
+    });
+
+    allSignals.sort((a, b) => b.confidence - a.confidence);
+    const topSignals = allSignals.slice(0, 12);
+    window._fvgSignals = topSignals;
+
+    document.getElementById('fvg-stat-scanned').textContent = universe.length;
+    document.getElementById('fvg-stat-bull').textContent = allSignals.filter(s => s.gapType === 'bullish').length;
+    document.getElementById('fvg-stat-bear').textContent = allSignals.filter(s => s.gapType === 'bearish').length;
+    document.getElementById('fvg-last-scan').textContent = `Last scan: ${new Date().toLocaleTimeString()} · ${tf} TF · ${allSignals.length} candidates`;
+
+    fvgRenderSignalsTable(topSignals);
+    fvgAutoExecuteTopSignals(topSignals);
+    pushTerminalLog("FVG", `Scan complete. ${allSignals.length} gap candidates → Top ${topSignals.length} shown.`);
+  }
+
+  function fvgRenderSignalsTable(signals) {
+    const tbody = document.getElementById('fvg-signals-tbody');
+    if (!tbody) return;
+    if (!signals.length) {
+      tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:40px; color:var(--color-muted); font-family:var(--font-mono);">No fresh fair value gaps found this scan. Retry shortly.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = signals.map((sig, idx) => {
+      const isLong = sig.direction === 'Long';
+      const confColor = sig.confidence >= FVG_AUTO_CONFIDENCE_GATE ? '#10b981' : sig.confidence >= 70 ? '#eab308' : '#94a3b8';
+      const alreadyOpen = fvgState.positions.some(p => p.symbol === sig.symbol);
+      const trendTag = sig.trendBias === 'up' ? '<span class="trend-long">BULLISH ALIGNMENT</span>' : sig.trendBias === 'down' ? '<span class="trend-short">BEARISH ALIGNMENT</span>' : '<span style="color:var(--color-muted);">NEUTRAL SIDEWAYS</span>';
+      const validColor = sig.validation.includes('High Prob') ? 'var(--color-green)' : sig.validation.includes('Cheap') ? 'var(--color-yellow)' : '#94a3b8';
+      return `
+      <tr>
+        <td style="font-family:var(--font-mono); font-weight:700; color:#fff;">${sig.symbol.replace('USDT','')}<span style="color:var(--color-muted); font-weight:400;">/USDT</span></td>
+        <td><span class="${isLong?'trend-long':'trend-short'}">${isLong?'▲ LONG':'▼ SHORT'}</span></td>
+        <td style="font-family:var(--font-mono); color:#e2e8f0;">${fvgFmtPrice(sig.price)}</td>
+        <td style="font-family:var(--font-mono); color:var(--color-red);">${fvgFmtPrice(sig.sl)}</td>
+        <td style="font-family:var(--font-mono); color:var(--color-green);">${fvgFmtPrice(sig.tp)}</td>
+        <td style="font-size:11px;">${trendTag}</td>
+        <td><span class="fvg-conf-badge" style="background:rgba(255,255,255,0.04); border:1px solid ${validColor}55; color:${validColor};">${sig.validation}</span></td>
+        <td><span class="fvg-conf-badge" style="background:rgba(255,255,255,0.04); border:1px solid ${confColor}55; color:${confColor};">${sig.confidence.toFixed(0)}%</span></td>
+        <td>
+          <div style="display:flex; gap:4px;">
+            <button class="btn btn-secondary" style="padding:3px 8px; font-size:10px;" onclick="fvgOpenChart(${idx})">Chart</button>
+            ${alreadyOpen
+              ? `<button class="btn btn-secondary" style="padding:3px 8px; font-size:10px; opacity:0.5;" disabled>✓ Open</button>`
+              : `<button class="btn ${isLong?'btn-success':'btn-danger'}" style="padding:3px 8px; font-size:10px; font-weight:700;" onclick="fvgExecuteSignal(${idx})">▶ Trade</button>`}
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  function fvgOpenChart(idx) {
+    const sig = window._fvgSignals[idx];
+    if (!sig) return;
+    const indStr = `${sig.gapType.toUpperCase()} FVG, Trend ${sig.trendBias.toUpperCase()}, R:R ${sig.rrRatio}:1`;
+    displayBlueprintChartViewport(sig.symbol, 'fvg_strategy', sig.direction, indStr, sig.validation, sig.confidence.toFixed(1), sig.price, sig.tp, sig.sl);
+  }
+
+  function fvgExecuteSignal(idx) {
+    const sig = window._fvgSignals[idx];
+    if (!sig) return;
+    if (fvgState.positions.some(p => p.symbol === sig.symbol)) { pushTerminalLog("FVG", `⚠ ${sig.symbol} already open in FVG pool — skipped.`); return; }
+    if (fvgState.positions.length >= FVG_MAX_POSITIONS) { pushTerminalLog("FVG", `⚠ FVG pool max positions (${FVG_MAX_POSITIONS}) reached.`); return; }
+
+    const livePrice = runtimeLivePrices[sig.symbol] || sig.price;
+    const leverage = botConfig.defaultLeverage || 20;
+    const marginSize = fvgState.walletBalance * 0.05;
+    const notional = marginSize * leverage;
+
+    const position = {
+      id: "FVG-" + Date.now() + "-" + Math.floor(Math.random() * 1000),
+      symbol: sig.symbol, direction: sig.direction, leverage,
+      entryPrice: livePrice, margin: parseFloat(marginSize.toFixed(2)),
+      notional: parseFloat(notional.toFixed(2)), quantity: parseFloat((notional / livePrice).toFixed(4)),
+      sl: parseFloat(sig.sl.toPrecision(6)), tp: parseFloat(sig.tp.toPrecision(6)),
+      confidence: sig.confidence.toFixed(1), gapType: sig.gapType, validation: sig.validation,
+      openTimestampMs: Date.now(), openTimestampStr: new Date().toLocaleTimeString()
+    };
+    fvgState.positions.push(position);
+    fvgSaveCache();
+    pushTerminalLog("FVG", `✅ FVG ${sig.direction} opened: ${sig.symbol} @ ${fvgFmtPrice(livePrice)} · TP ${fvgFmtPrice(sig.tp)} / SL ${fvgFmtPrice(sig.sl)} · Conf ${sig.confidence.toFixed(0)}%`);
+    fvgRenderSignalsTable(window._fvgSignals);
+    fvgSyncPositionsView();
+  }
+
+  function fvgAutoExecuteTopSignals(signals) {
+    const toggle = document.getElementById('fvg-auto-execute');
+    if (!toggle || !toggle.checked) return;
+    let executed = 0;
+    signals.forEach((sig, idx) => {
+      if (fvgState.positions.length >= FVG_MAX_POSITIONS) return;
+      if (fvgState.positions.some(p => p.symbol === sig.symbol)) return;
+      if (sig.confidence < FVG_AUTO_CONFIDENCE_GATE) return;
+      fvgExecuteSignal(idx);
+      executed++;
+    });
+    if (executed > 0) pushTerminalLog("FVG", `⚡ Auto-Execute opened ${executed} FVG position(s) at ${FVG_AUTO_CONFIDENCE_GATE}%+ confidence.`);
+  }
+
+  // ---- FVG: TP/SL monitoring (only closes on TP or SL hit — never on rescan/refresh) ----
+  function fvgProcessRiskBoundaries() {
+    for (let i = fvgState.positions.length - 1; i >= 0; i--) {
+      const pos = fvgState.positions[i];
+      const live = runtimeLivePrices[pos.symbol] || pos.entryPrice;
+      let hit = false, reason = '';
+      if (pos.direction === 'Long') {
+        if (live <= pos.sl) { hit = true; reason = 'Stop-Loss Hit'; }
+        else if (live >= pos.tp) { hit = true; reason = 'Take-Profit Hit'; }
+      } else {
+        if (live >= pos.sl) { hit = true; reason = 'Stop-Loss Hit'; }
+        else if (live <= pos.tp) { hit = true; reason = 'Take-Profit Hit'; }
+      }
+      if (hit) fvgClosePosition(pos.id, reason, live);
+    }
+  }
+
+  function fvgClosePosition(positionId, reason, closePrice) {
+    const idx = fvgState.positions.findIndex(p => p.id === positionId);
+    if (idx === -1) return;
+    const pos = fvgState.positions[idx];
+    const settlePrice = closePrice || runtimeLivePrices[pos.symbol] || pos.entryPrice;
+    const delta = settlePrice - pos.entryPrice;
+    let pnl = pos.direction === 'Long' ? delta * pos.quantity : -delta * pos.quantity;
+    pnl -= pos.notional * 0.0006;
+    fvgState.walletBalance += pnl;
+    const closeTimestampMs = Date.now();
+    const durationMs = closeTimestampMs - (pos.openTimestampMs || closeTimestampMs);
+    fvgState.tradeHistory.unshift({
+      symbol: pos.symbol, direction: pos.direction, pnl, reason,
+      entryPrice: pos.entryPrice, exitPrice: settlePrice,
+      margin: pos.margin, leverage: pos.leverage, volume: pos.notional,
+      confidence: pos.confidence, gapType: pos.gapType, validation: pos.validation,
+      openTimestampStr: pos.openTimestampStr, timestamp: new Date().toLocaleTimeString(),
+      durationStr: formatDuration(durationMs), durationMs,
+      dateStr: new Date().toLocaleDateString(), closedAt: closeTimestampMs
+    });
+    fvgState.positions.splice(idx, 1);
+    fvgSaveCache();
+    pushTerminalLog("FVG", `Settled ${pos.symbol}: ${reason}. Net yield: <span class="${pnl>=0?'green-text':'red-text'}">${pnl.toFixed(2)} USDT</span>`);
+    fvgSyncPositionsView();
+    renderFvgLedgerModules();
+  }
+
+  function fvgSyncPositionsView() {
+    const tbody = document.getElementById('fvg-positions-tbody');
+    const badge = document.getElementById('fvg-pos-count-badge');
+    if (badge) badge.textContent = `${fvgState.positions.length} open`;
+    if (!tbody) return;
+    if (!fvgState.positions.length) {
+      tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--color-muted); padding:30px;">No FVG positions open — auto-execute will fill this once a fresh 80%+ confidence gap signal is found.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = fvgState.positions.map(pos => {
+      const live = runtimeLivePrices[pos.symbol] || pos.entryPrice;
+      const delta = live - pos.entryPrice;
+      const pnl = pos.direction === 'Long' ? delta * pos.quantity : -delta * pos.quantity;
+      const roe = (pnl / pos.margin) * 100;
+      const heldMs = Date.now() - pos.openTimestampMs;
+      return `
+      <tr>
+        <td style="font-weight:700; color:#fff; font-family:var(--font-mono);">${pos.symbol}</td>
+        <td><span class="${pos.direction==='Long'?'trend-long':'trend-short'}">${pos.direction} x${pos.leverage}</span></td>
+        <td class="text-mono">${fvgFmtPrice(pos.entryPrice)}</td>
+        <td class="text-mono" style="color:var(--color-yellow); font-weight:600;">${fvgFmtPrice(live)}</td>
+        <td class="text-mono" style="color:var(--color-green);">${fvgFmtPrice(pos.tp)}</td>
+        <td class="text-mono" style="color:var(--color-red);">${fvgFmtPrice(pos.sl)}</td>
+        <td class="text-mono" style="font-size:11px;">${formatDuration(heldMs)}</td>
+        <td class="text-mono"><span class="${pnl>=0?'green-text':'red-text'}">${pnl.toFixed(2)} USDT (${roe.toFixed(1)}%)</span></td>
+        <td>
+          <div style="display:flex; gap:4px;">
+            <button class="btn btn-secondary" style="padding:4px 8px; font-size:10px;" onclick="displayBlueprintChartViewport('${pos.symbol}','fvg_position','${pos.direction}','${pos.gapType} FVG','${pos.validation}',${pos.confidence},${pos.entryPrice},${pos.tp},${pos.sl})">Chart</button>
+            <button class="btn btn-danger" style="padding:4px 8px; font-size:10px; font-weight:600;" onclick="fvgClosePosition('${pos.id}','Manual User Close',${live})">Close</button>
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  function initFvgStrategyTab() {
+    if (!fvgTabInitialized) {
+      fvgTabInitialized = true;
+      fvgScannerThread = setInterval(runFvgScan, 60000); // background rescan every 60s once visited
+    }
+    fvgSyncPositionsView();
+    runFvgScan();
+  }
+
+  // ============================================================
+  // END FVG STRATEGY
+  // ============================================================
+
   function pushTerminalLog(tag, info) {
+
     const time = new Date().toLocaleTimeString();
     engineState.logs.unshift({ time, tag, info });
     if (engineState.logs.length > 35) engineState.logs.pop();
